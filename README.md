@@ -54,7 +54,7 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
-> **Note:** `COPYELEMENT_API_KEY` is optional for browsing free components and wireframes, and required to insert Pro V4 items. You can generate a token in your [CopyElement Account](https://copyelement.com).
+> **Authentication:** `COPYELEMENT_API_KEY` is required to retrieve and insert component JSON schemas. You can generate or find your token in your [CopyElement Account](https://copyelement.com).
 
 ---
 

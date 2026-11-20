@@ -173,7 +173,7 @@ server.tool(
         isError: true,
         content: [{
           type: 'text',
-          text: `Failed to fetch Elementor payload: ${err.message}\nNote: Pro items require setting COPYELEMENT_API_KEY environment variable.`,
+          text: `Failed to fetch Elementor payload: ${err.message}\nNote: Inserting components requires setting the COPYELEMENT_API_KEY environment variable.`,
         }],
       };
     }

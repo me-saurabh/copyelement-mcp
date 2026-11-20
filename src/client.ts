@@ -68,15 +68,18 @@ export class CopyElementClient {
     const url = `${this.apiBase}/api/v4/plugin/insert`;
     const token = apiKey || this.defaultApiKey;
 
+    if (!token) {
+      throw new Error(
+        'Authentication required: Please set the COPYELEMENT_API_KEY environment variable (or pass apiKey argument) to retrieve and insert CopyElement components.'
+      );
+    }
+
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'User-Agent': 'CopyElement-MCP/1.0.0',
+      'Authorization': `Bearer ${token}`,
     };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
     const response = await fetch(url, {
       method: 'POST',
