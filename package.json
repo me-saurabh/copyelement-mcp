@@ -1,0 +1,53 @@
+{
+  "name": "copyelement-mcp",
+  "version": "1.0.0",
+  "description": "Official Model Context Protocol (MCP) server for CopyElement V4 — browse, search, and insert 560+ Elementor V4 components, bento grids, and templates directly in Claude, Cursor, and AI agents.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "copyelement-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "elementor",
+    "elementor-v4",
+    "copyelement",
+    "cursor",
+    "claude",
+    "ai-agent",
+    "bento-grid",
+    "templates",
+    "wordpress"
+  ],
+  "author": "Saurabh <team@copyelement.com> (https://copyelement.com)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/me-saurabh/copyelement-mcp.git"
+  },
+  "homepage": "https://copyelement.com",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
