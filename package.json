@@ -1,7 +1,10 @@
 {
   "name": "copyelement-mcp",
   "version": "1.0.0",
-  "description": "Official Model Context Protocol (MCP) server for CopyElement V4 — browse, search, and insert 560+ Elementor V4 components, bento grids, and templates directly in Claude, Cursor, and AI agents.",
+  "description": "Official Model Context Protocol (MCP) server for CopyElement — browse, search, and insert 5,000+ Elementor components, V4 containers, and 2,000+ templates directly in Claude, Cursor, and AI agents.",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
