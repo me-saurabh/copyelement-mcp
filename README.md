@@ -1,7 +1,7 @@
 # copyelement-mcp
 
-> **The Official Model Context Protocol (MCP) Server for CopyElement V4.**  
-> Give AI agents in **Claude Desktop, Cursor, Antigravity, Windsurf, and ChatGPT** direct superpowers to discover, inspect, and assemble 560+ production-grade Elementor V4 components, bento grids, and templates.
+> **The Official Model Context Protocol (MCP) Server for CopyElement.**  
+> Give AI agents in **Claude Desktop, Cursor, Antigravity, Windsurf, and ChatGPT** direct powers to discover, inspect, and insert 5,000+ Elementor components, V4 containers, and 2,000+ full-page templates.
 
 [![npm version](https://img.shields.io/npm/v/copyelement-mcp.svg)](https://www.npmjs.com/package/copyelement-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,13 +11,27 @@
 
 ## ⚡ What is CopyElement MCP?
 
-Elementor V4 introduced atomic flexbox/grid containers, CSS variables, and global classes. **CopyElement** is the largest curated library of production-ready Elementor V4 components.
+**CopyElement** is the largest curated library of copy-paste Elementor components, V4 container elements, and full-page website templates.
 
-With **`copyelement-mcp`**, your AI coding assistants (Claude, Cursor, etc.) can:
-1. **Search & Browse:** Query 560+ V4 components across 15+ categories (Hero, Bento Grids, Wireframes, Pricing, Testimonials, Footers).
-2. **Inspect & Preview:** View live preview image URLs, responsive structure, and design tokens before inserting.
-3. **Get Production Code:** Fetch the native Elementor V4 JSON element trees with zero manual copying.
-4. **Assemble Complete Templates:** Automatically stitch multiple sections (e.g. Hero + Bento + Pricing + Footer) into a single 1-click importable `.json` page template file!
+With **`copyelement-mcp`**, your AI coding assistants can:
+1. **Search & Browse Components:** Query 5,000+ components across 15+ categories (Hero, Bento Grids, Wireframes, Pricing, Testimonials, Footers).
+2. **Search Full-Page Templates:** Query 2,000+ full website template kits (Business, SaaS, Agency, Insurance, Fintech, Healthcare).
+3. **Get Production Code:** Fetch the native Elementor JSON container trees directly without manual file copying.
+4. **Assemble Complete Page Templates:** Stitch multiple sections (e.g., Hero + Bento + Pricing + Footer) into a single 1-click importable `.json` page template file!
+5. **Secure & Rate-Limited:** Direct CDN URLs are 100% hidden behind CopyElement's secure API gateway, with rate limiting protection for all users.
+
+---
+
+## 🔑 Authentication & API Key
+
+To access the server, you need a personal CopyElement API Key (`ce_live_...`):
+
+1. Log into your account at [copyelement.com](https://copyelement.com).
+2. Go to your **[Profile > API & MCP](https://copyelement.com/profile)** tab.
+3. Click **Generate API Key** and copy your key.
+
+* **Free Users:** Can generate an API key and access all 100% free components and full-page templates.
+* **Pro Users:** Can access the entire library of 5,000+ components, V4 elements, and 2,000+ templates.
 
 ---
 
@@ -26,14 +40,32 @@ With **`copyelement-mcp`**, your AI coding assistants (Claude, Cursor, etc.) can
 Run directly with `npx`:
 
 ```bash
-npx copyelement-mcp
+COPYELEMENT_API_KEY="ce_live_your_key_here" npx copyelement-mcp
 ```
 
 ---
 
 ## 🛠️ Configuration for AI Clients
 
-### 1. Claude Desktop
+### 1. Cursor IDE
+
+Add this to your `~/.cursor/mcp.json` or project `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "copyelement": {
+      "command": "npx",
+      "args": ["-y", "copyelement-mcp"],
+      "env": {
+        "COPYELEMENT_API_KEY": "ce_live_your_key_here"
+      }
+    }
+  }
+}
+```
+
+### 2. Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
 
@@ -47,20 +79,16 @@ Add this to your `claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "copyelement-mcp"],
       "env": {
-        "COPYELEMENT_API_KEY": "YOUR_COPYELEMENT_TOKEN_HERE"
+        "COPYELEMENT_API_KEY": "ce_live_your_key_here"
       }
     }
   }
 }
 ```
 
-> **Authentication:** `COPYELEMENT_API_KEY` is required to retrieve and insert component JSON schemas. You can generate or find your token in your [CopyElement Account](https://copyelement.com).
+### 3. Windsurf
 
----
-
-### 2. Cursor IDE
-
-In your project root, create or edit `.cursor/mcp.json`:
+Add this to your `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
@@ -69,27 +97,7 @@ In your project root, create or edit `.cursor/mcp.json`:
       "command": "npx",
       "args": ["-y", "copyelement-mcp"],
       "env": {
-        "COPYELEMENT_API_KEY": "YOUR_COPYELEMENT_TOKEN_HERE"
-      }
-    }
-  }
-}
-```
-
----
-
-### 3. Antigravity
-
-In Antigravity settings or `antigravity.json`:
-
-```json
-{
-  "mcpServers": {
-    "copyelement": {
-      "command": "npx",
-      "args": ["-y", "copyelement-mcp"],
-      "env": {
-        "COPYELEMENT_API_KEY": "YOUR_COPYELEMENT_TOKEN_HERE"
+        "COPYELEMENT_API_KEY": "ce_live_your_key_here"
       }
     }
   }
@@ -100,76 +108,37 @@ In Antigravity settings or `antigravity.json`:
 
 ## 🧰 Available MCP Tools
 
-### `search_v4_components`
-Search components across categories, tags, or keywords.
-* **Arguments:**
-  * `query` (optional): e.g. `"bento"`, `"split hero"`, `"dark pricing"`, `"testimonial"`
-  * `category` (optional): e.g. `"hero"`, `"bento"`, `"wireframes"`, `"testimonials"`, `"pricing-table"`, `"footer"`
-  * `filter` (optional): `"all"` | `"free"` | `"pro"` (default: `"all"`)
-  * `limit` (optional): max items to return (default: `15`, max: `100`)
-
-### `get_v4_categories`
-Returns all available layout categories and descriptions.
-
-### `get_v4_component`
-Fetches detailed metadata, tags, and live preview image URL for a specific component UUID or slug.
-* **Arguments:**
-  * `id` (required): Component UUID or slug
-
-### `get_v4_elementor_payload`
-Streams the production-ready Elementor V4 JSON element container tree (`elements`) for insertion.
-* **Arguments:**
-  * `id` (required): Component UUID
-  * `type` (optional): `"component"` (default) or `"template"`
-  * `apiKey` (optional): Override Bearer token if not set in environment
-
-### `build_v4_page_template`
-Stitches multiple V4 components into a single valid Elementor page template `.json` file with deduplicated IDs.
-* **Arguments:**
-  * `title` (required): Title for the template (e.g. `"SaaS Landing Page"`)
-  * `component_ids` (required): Ordered list of UUIDs, e.g. `["hero-id", "bento-id", "pricing-id", "footer-id"]`
+| Tool | Description |
+| :--- | :--- |
+| `search_components` | Search & filter components with query, category, pricing (`all`, `free`, `pro`), and V4 toggle. |
+| `search_templates` | Search full-page website kits and layouts (Insura, Zenpay, Eradica, SaaS, Corporate, etc.). |
+| `get_component` | Retrieve metadata, preview images, and tags for a specific component. |
+| `get_template` | Retrieve metadata and preview images for a specific full-page template kit. |
+| `get_elementor_payload` | Fetch the production-ready Elementor JSON element tree ready to insert into an Elementor page. |
+| `build_elementor_page` | Merge multiple sections into a single standard Elementor page template `.json` file with unique IDs. |
+| `list_categories` | Quick discovery list of component and template design categories. |
 
 ---
 
-## 💡 Example AI Prompts
+## 📦 Publishing & Development
 
-Try asking Claude or Cursor:
-
-> *"Search for dark bento grids in CopyElement V4 and show me the preview links."*
-
-> *"Build a complete landing page using CopyElement V4 for a modern AI software company: pick a hero, a bento feature section, testimonials, pricing table, and a footer, and assemble them into a template JSON file."*
-
-> *"Find a free V4 wireframe hero and get its Elementor JSON code."*
-
----
-
-## 🔒 Security & Cloud Privacy
-
-* **Zero R2 URL Exposure:** Storage URLs are kept 100% private. Payload retrieval is proxied server-to-server.
-* **Encrypted API Communication:** All communication routes through secure TLS endpoints with Bearer token authentication.
-
----
-
-## 📦 Development & Local Testing
-
-Clone and test locally:
+To build locally:
 
 ```bash
 git clone https://github.com/me-saurabh/copyelement-mcp.git
 cd copyelement-mcp
 npm install
 npm run build
-npm start
 ```
 
-### Test with MCP Inspector:
+To run tests:
 
 ```bash
-npx @modelcontextprotocol/inspector node dist/index.js
+npm start
 ```
 
 ---
 
 ## 📄 License
 
-MIT License © [CopyElement](https://copyelement.com) & [Saurabh](https://github.com/me-saurabh).
+MIT License &copy; [CopyElement](https://copyelement.com).

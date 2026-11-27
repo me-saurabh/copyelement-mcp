@@ -12,58 +12,75 @@ const server = new McpServer({
   version: '1.0.0',
 });
 
-// Category list constant for quick reference and validation
-const KNOWN_CATEGORIES = [
-  { slug: 'wireframes', name: 'WireFrames (V4)', description: '520+ wireframe structural layout components' },
-  { slug: 'hero', name: 'Hero Sections', description: 'Split, centered, minimal, and high-impact hero sections' },
-  { slug: 'bento', name: 'Bento Grids', description: 'Modern Apple/Stripe-style interactive bento grid layouts' },
-  { slug: 'feature-and-benefits', name: 'Feature and Benefits', description: 'Product and service feature grids and showcases' },
-  { slug: 'testimonials', name: 'Testimonials', description: 'Social proof, reviews, carousels, and spotlight quotes' },
-  { slug: 'pricing-table', name: 'Pricing Tables', description: 'Comparison charts, monthly/annual toggle pricing' },
-  { slug: 'call-to-action', name: 'Call to Action (CTA)', description: 'Lead capture, email opt-ins, and conversion banners' },
-  { slug: 'team', name: 'Team & Bio', description: 'Team member cards, founder profiles, and avatar grids' },
+// Category quick reference constants
+const COMPONENT_CATEGORIES = [
+  { slug: 'hero', name: 'Hero Header Sections', description: 'Impactful centered, split, and minimal hero sections' },
+  { slug: 'bento', name: 'Bento Grids', description: 'Apple/Stripe-style interactive multi-box feature grids' },
+  { slug: 'feature-and-benefits', name: 'Feature Sections', description: 'Product and service feature showcases' },
+  { slug: 'testimonials', name: 'Testimonials & Reviews', description: 'Social proof, review grids, and quotes' },
+  { slug: 'pricing-table', name: 'Pricing Tables', description: 'Tiered subscription and pricing tables' },
+  { slug: 'call-to-action', name: 'Call to Action (CTA)', description: 'Lead capture and conversion banners' },
+  { slug: 'wireframes', name: 'WireFrames (V4)', description: '520+ structural wireframe layout elements' },
+  { slug: 'footer', name: 'Footers', description: 'Responsive multi-column footers' },
+  { slug: 'header', name: 'Headers & Navbars', description: 'Navigation bars and mega menu structures' },
   { slug: 'faq', name: 'FAQ Sections', description: 'Accordion questions and answers' },
-  { slug: 'footer', name: 'Footers', description: 'Modern responsive multi-column website footers' },
-  { slug: 'header', name: 'Headers & Menus', description: 'Site navigation and header layouts' },
-  { slug: 'timeline', name: 'Timeline & Process', description: 'Step-by-step roadmap and company milestones' },
-  { slug: 'counter', name: 'Counters & Stats', description: 'Animated metrics and key performance indicators' },
+  { slug: 'team', name: 'Team & Bios', description: 'Team member cards and profile grids' },
+];
+
+const TEMPLATE_CATEGORIES = [
+  { slug: 'business-corporate', name: 'Business & Corporate', description: 'Full business, agency, and insurance kits (e.g., Insura, Eradica)' },
+  { slug: 'technology', name: 'Technology & SaaS', description: 'Fintech, SaaS, and software templates (e.g., Zenpay)' },
+  { slug: 'creative-design', name: 'Creative & Design', description: 'Design agency, studio, and portfolio kits' },
+  { slug: 'health-medical', name: 'Health & Medical', description: 'Clinics, dental, wellness, and medical templates' },
+  { slug: 'food-drink', name: 'Food & Drink', description: 'Restaurants, cafes, catering, and bakery kits' },
+  { slug: 'beauty', name: 'Beauty & Salon', description: 'Spas, beauty salons, and cosmetics layouts' },
 ];
 
 /**
- * Tool: Search V4 Components
+ * Tool: Search Components
  */
 server.tool(
-  'search_v4_components',
-  'Search and discover CopyElement Elementor V4 components, bento grids, hero sections, and wireframes.',
+  'search_components',
+  'Search and discover CopyElement Elementor components (heroes, bento grids, footers, pricing, etc.) that have importable Elementor files.',
   {
-    query: z.string().optional().describe('Search keyword (e.g., "bento", "hero split", "dark saas", "pricing", "pricing toggle")'),
-    category: z.string().optional().describe('Filter by category slug (e.g., "bento", "hero", "wireframes", "testimonials", "pricing-table", "footer")'),
+    query: z.string().optional().describe('Search keyword (e.g., "bento", "hero split", "pricing", "dark saas", "footer")'),
+    category: z.string().optional().describe('Filter by component category slug (e.g., "bento", "hero", "wireframes", "pricing-table")'),
     filter: z.enum(['all', 'free', 'pro']).optional().default('all').describe('Filter by pricing tier: "all", "free", or "pro"'),
-    limit: z.number().min(1).max(100).optional().default(15).describe('Maximum number of items to return (default: 15)'),
+    only_v4: z.boolean().optional().default(false).describe('Filter exclusively for Elementor V4 container components'),
+    limit: z.number().min(1).max(100).optional().default(20).describe('Max results to return (default: 20)'),
+    apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env variable is set)'),
   },
-  async ({ query, category, filter, limit }) => {
+  async ({ query, category, filter, only_v4, limit, apiKey }) => {
     try {
-      const items = await client.fetchCatalog('component', { query, category, filter, limit });
+      const response = await client.fetchCatalog('component', {
+        query,
+        category,
+        filter,
+        v4: only_v4,
+        limit,
+        apiKey,
+      });
 
-      if (items.length === 0) {
+      if (!response.items || response.items.length === 0) {
         return {
           content: [{
             type: 'text',
-            text: `No V4 components found matching query: "${query || ''}" in category: "${category || 'all'}". Try broader keywords or call get_v4_categories to see available categories.`,
+            text: `No components found matching query: "${query || ''}" in category: "${category || 'all'}". Try broader search keywords.`,
           }],
         };
       }
 
-      const formatted = items.map((item, index) => {
-        const cat = item.category?.name || 'Uncategorized';
+      const formatted = response.items.map((item, index) => {
+        const cat = item.category || 'Uncategorized';
         const tier = item.is_pro ? '[PRO]' : '[FREE]';
-        return `${index + 1}. ${tier} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Tags: ${item.tags || 'none'}\n   - Preview Image: ${item.image_url}\n   - Description: ${item.description || 'No description'}\n   - Web URL: https://copyelement.com/components/${item.slug || item.id}`;
+        const v4 = item.is_v4 ? ' [V4]' : ' [V3]';
+        return `${index + 1}. ${tier}${v4} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Tags: ${item.tags || 'none'}\n   - Preview: ${item.preview_image || item.image_url || 'none'}\n   - Description: ${item.description || 'No description'}\n   - Accessible on your plan: ${item.accessible ? 'Yes' : 'No (Pro required)'}`;
       }).join('\n\n');
 
       return {
         content: [{
           type: 'text',
-          text: `Found ${items.length} V4 components:\n\n${formatted}\n\nTip: Call get_v4_elementor_payload with a component ID to retrieve its native Elementor V4 container JSON.`,
+          text: `Found ${response.items.length} components (User Tier: ${response.user_tier.toUpperCase()} | Remaining Quota: ${response.remaining_quota ?? 'N/A'}):\n\n${formatted}\n\nTip: Call get_elementor_payload with a component ID to retrieve its Elementor JSON container tree.`,
         }],
       };
     } catch (err: any) {
@@ -76,80 +93,138 @@ server.tool(
 );
 
 /**
- * Tool: Get Available V4 Categories
+ * Tool: Search Templates
  */
 server.tool(
-  'get_v4_categories',
-  'List all available Elementor V4 design categories and layouts.',
-  {},
-  async () => {
-    const list = KNOWN_CATEGORIES.map(c => `* **${c.name}** (slug: \`${c.slug}\`): ${c.description}`).join('\n');
-    return {
-      content: [{
-        type: 'text',
-        text: `Available CopyElement V4 Categories:\n\n${list}\n\nUse the category slug with search_v4_components (e.g. category: "bento") to explore specific styles.`,
-      }],
-    };
-  }
-);
-
-/**
- * Tool: Get Single Component Details
- */
-server.tool(
-  'get_v4_component',
-  'Get comprehensive details, preview image, and metadata for a specific V4 component.',
+  'search_templates',
+  'Search and discover CopyElement full-page Elementor website templates and kits (Insura, Zenpay, Eradica, SaaS, Corporate, etc.) that have importable Elementor files.',
   {
-    id: z.string().describe('The UUID or slug of the component'),
+    query: z.string().optional().describe('Search keyword (e.g., "insurance", "fintech", "pest control", "agency", "landing page")'),
+    category: z.string().optional().describe('Filter by template category slug (e.g., "business-corporate", "technology", "creative-design")'),
+    filter: z.enum(['all', 'free', 'pro']).optional().default('all').describe('Filter by pricing tier: "all", "free", or "pro"'),
+    limit: z.number().min(1).max(100).optional().default(20).describe('Max results to return (default: 20)'),
+    apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env variable is set)'),
   },
-  async ({ id }) => {
+  async ({ query, category, filter, limit, apiKey }) => {
     try {
-      const item = await client.getComponentById(id);
-      if (!item) {
+      const response = await client.fetchCatalog('template', {
+        query,
+        category,
+        filter,
+        limit,
+        apiKey,
+      });
+
+      if (!response.items || response.items.length === 0) {
         return {
-          isError: true,
-          content: [{ type: 'text', text: `Component with ID "${id}" was not found in the CopyElement V4 library.` }],
+          content: [{
+            type: 'text',
+            text: `No templates found matching query: "${query || ''}" in category: "${category || 'all'}". Try broader search keywords.`,
+          }],
         };
       }
 
-      const info = {
-        id: item.id,
-        name: item.name,
-        category: item.category?.name || 'Uncategorized',
-        category_slug: item.category?.slug,
-        is_pro: item.is_pro,
-        is_v4: item.is_v4,
-        description: item.description,
-        tags: item.tags,
-        preview_image_url: item.image_url,
-        url: `https://copyelement.com/components/${item.slug || item.id}`,
-      };
+      const formatted = response.items.map((item, index) => {
+        const cat = item.category || 'Uncategorized';
+        const tier = item.is_pro ? '[PRO]' : '[FREE]';
+        return `${index + 1}. ${tier} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Preview: ${item.preview_image || item.image_url || 'none'}\n   - Description: ${item.description || 'Full page Elementor layout'}\n   - Accessible on your plan: ${item.accessible ? 'Yes' : 'No (Pro required)'}`;
+      }).join('\n\n');
 
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify(info, null, 2),
+          text: `Found ${response.items.length} full-page templates (User Tier: ${response.user_tier.toUpperCase()} | Remaining Quota: ${response.remaining_quota ?? 'N/A'}):\n\n${formatted}\n\nTip: Call get_elementor_payload with a template ID and type "template" to retrieve its Elementor JSON structure.`,
         }],
       };
     } catch (err: any) {
       return {
         isError: true,
-        content: [{ type: 'text', text: `Error: ${err.message}` }],
+        content: [{ type: 'text', text: `Failed to search templates: ${err.message}` }],
       };
     }
   }
 );
 
 /**
- * Tool: Get Native Elementor V4 Payload
+ * Tool: Get Component Details
  */
 server.tool(
-  'get_v4_elementor_payload',
-  'Retrieve the production-ready Elementor V4 JSON element container tree for live page insertion.',
+  'get_component',
+  'Get comprehensive metadata, tags, preview images, and category for a specific component.',
   {
-    id: z.string().describe('The UUID of the component'),
+    id: z.string().describe('The UUID or slug of the component'),
+    apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env is set)'),
+  },
+  async ({ id, apiKey }) => {
+    try {
+      const item = await client.getItemDetails(id, 'component', apiKey);
+      if (!item) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Component "${id}" was not found or has no importable file.` }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(item, null, 2),
+        }],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Error retrieving component: ${err.message}` }],
+      };
+    }
+  }
+);
+
+/**
+ * Tool: Get Template Details
+ */
+server.tool(
+  'get_template',
+  'Get comprehensive metadata and preview images for a specific full-page template kit.',
+  {
+    id: z.string().describe('The UUID or slug of the template'),
+    apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env is set)'),
+  },
+  async ({ id, apiKey }) => {
+    try {
+      const item = await client.getItemDetails(id, 'template', apiKey);
+      if (!item) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Template "${id}" was not found or has no importable file.` }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(item, null, 2),
+        }],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Error retrieving template: ${err.message}` }],
+      };
+    }
+  }
+);
+
+/**
+ * Tool: Get Native Elementor Payload
+ */
+server.tool(
+  'get_elementor_payload',
+  'Retrieve the production-ready Elementor JSON container/section tree for live page insertion. Direct CDN URLs are completely hidden behind the secure API gateway.',
+  {
+    id: z.string().describe('The UUID of the component or template'),
     type: z.enum(['component', 'template']).optional().default('component').describe('Item type: "component" or "template"'),
-    apiKey: z.string().optional().describe('CopyElement Bearer API key (optional if COPYELEMENT_API_KEY env is set)'),
+    apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env is set)'),
   },
   async ({ id, type, apiKey }) => {
     try {
@@ -160,11 +235,14 @@ server.tool(
           type: 'text',
           text: JSON.stringify({
             success: true,
-            component_id: id,
+            id: result.id,
             name: result.name,
+            type: result.type,
             is_v4: result.is_v4,
+            is_pro: result.is_pro,
             elements_count: result.elements?.length || 0,
             elements: result.elements,
+            remaining_quota: result.remaining_quota,
           }, null, 2),
         }],
       };
@@ -173,7 +251,7 @@ server.tool(
         isError: true,
         content: [{
           type: 'text',
-          text: `Failed to fetch Elementor payload: ${err.message}\nNote: Inserting components requires setting the COPYELEMENT_API_KEY environment variable.`,
+          text: `Failed to fetch Elementor payload: ${err.message}`,
         }],
       };
     }
@@ -181,15 +259,15 @@ server.tool(
 );
 
 /**
- * Tool: Build Complete Elementor V4 Page Template
+ * Tool: Build Complete Elementor Page Template
  */
 server.tool(
-  'build_v4_page_template',
-  'Assemble multiple V4 components into a single complete Elementor Page Template JSON file ready for 1-click import into WordPress.',
+  'build_elementor_page',
+  'Assemble multiple components and sections into a single complete Elementor Page Template JSON file ready for 1-click import into WordPress.',
   {
-    title: z.string().describe('Template title (e.g. "Modern AI SaaS Landing Page")'),
-    component_ids: z.array(z.string()).min(1).describe('Ordered list of component UUIDs to stitch together (e.g., [hero_id, bento_id, pricing_id, footer_id])'),
-    apiKey: z.string().optional().describe('CopyElement Bearer API key (optional if COPYELEMENT_API_KEY env is set)'),
+    title: z.string().describe('Template title (e.g., "Modern Fintech Landing Page")'),
+    component_ids: z.array(z.string()).min(1).describe('Ordered list of component UUIDs (e.g., [hero_id, bento_id, pricing_id, footer_id])'),
+    apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env is set)'),
   },
   async ({ title, component_ids, apiKey }) => {
     try {
@@ -209,7 +287,7 @@ server.tool(
       // Elementor template standard export structure
       const elementorTemplate = {
         version: '0.4',
-        title: title || 'CopyElement V4 Assembled Template',
+        title: title || 'CopyElement Assembled Page Template',
         type: 'page',
         content: allElements,
       };
@@ -223,7 +301,7 @@ server.tool(
             components_included: includedComponents,
             total_root_containers: allElements.length,
             template_json: elementorTemplate,
-            instructions: 'Save template_json to a .json file (e.g. template.json) and import it via WordPress Admin > Elementor > Templates > Import Templates.',
+            instructions: 'Save template_json to a .json file (e.g. page-template.json) and import it via WordPress Admin > Elementor > Templates > Import Templates, or copy content into Elementor canvas.',
           }, null, 2),
         }],
       };
@@ -233,6 +311,26 @@ server.tool(
         content: [{ type: 'text', text: `Failed to build page template: ${err.message}` }],
       };
     }
+  }
+);
+
+/**
+ * Tool: List Categories
+ */
+server.tool(
+  'list_categories',
+  'List available component and template design categories and layout slugs.',
+  {},
+  async () => {
+    const compList = COMPONENT_CATEGORIES.map(c => `* **${c.name}** (slug: \`${c.slug}\`): ${c.description}`).join('\n');
+    const tplList = TEMPLATE_CATEGORIES.map(c => `* **${c.name}** (slug: \`${c.slug}\`): ${c.description}`).join('\n');
+
+    return {
+      content: [{
+        type: 'text',
+        text: `Available Component Categories:\n${compList}\n\nAvailable Template Categories:\n${tplList}\n\nUse category slugs with search_components or search_templates.`,
+      }],
+    };
   }
 );
 
@@ -258,7 +356,7 @@ function regenerateElementIds(elements: any[]): any[] {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('CopyElement V4 MCP Server running on stdio');
+  console.error('CopyElement MCP Server running on stdio');
 }
 
 run().catch((error) => {
