@@ -9,7 +9,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "copyelement-mcp": "./dist/index.js"
+    "copyelement-mcp": "dist/index.js"
   },
   "files": [
     "dist",
@@ -32,7 +32,7 @@
   "author": "Saurabh <team@copyelement.com> (https://copyelement.com)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/me-saurabh/copyelement-mcp.git"
+    "url": "git+https://github.com/me-saurabh/copyelement-mcp.git"
   },
   "homepage": "https://copyelement.com",
   "license": "MIT",
