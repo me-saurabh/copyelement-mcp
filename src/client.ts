@@ -48,7 +48,8 @@ export class CopyElementClient {
     const url = `${this.apiBase}/api/mcp/components?${params.toString()}`;
     const headers: Record<string, string> = {
       Accept: 'application/json',
-      'User-Agent': 'CopyElement-MCP/1.0.0',
+      'User-Agent': 'CopyElement-MCP/1.0.1',
+      'x-copyelement-client': 'copyelement-mcp',
       Authorization: `Bearer ${token}`,
     };
 
@@ -112,7 +113,8 @@ export class CopyElementClient {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'User-Agent': 'CopyElement-MCP/1.0.0',
+      'User-Agent': 'CopyElement-MCP/1.0.1',
+      'x-copyelement-client': 'copyelement-mcp',
       Authorization: `Bearer ${token}`,
     };
 
