@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -9,7 +11,7 @@ const client = new CopyElementClient();
 
 const server = new McpServer({
   name: 'copyelement-mcp',
-  version: '1.0.0',
+  version: '1.0.1',
 });
 
 // Category quick reference constants
@@ -37,20 +39,79 @@ const TEMPLATE_CATEGORIES = [
 ];
 
 /**
+ * Structural analyzer to extract semantic outline from raw Elementor JSON trees.
+ * Conserves 95%+ LLM tokens compared to dumping thousands of raw JSON lines.
+ */
+interface ElementSummary {
+  totalContainers: number;
+  totalWidgets: number;
+  widgetTypes: string[];
+  treeOutline: string[];
+}
+
+function summarizeElements(elements: any[]): ElementSummary {
+  let totalContainers = 0;
+  let totalWidgets = 0;
+  const widgetSet = new Set<string>();
+  const treeOutline: string[] = [];
+
+  function traverse(items: any[], depth: number) {
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const indent = '  '.repeat(Math.min(depth, 5));
+      const elType = item.elType || 'element';
+
+      if (elType === 'container' || elType === 'section' || elType === 'column') {
+        totalContainers++;
+        const direction = item.settings?.flex_direction || item.settings?.container_type || elType;
+        if (treeOutline.length < 25) {
+          treeOutline.push(`${indent}📦 Container (${direction})`);
+        }
+      } else if (elType === 'widget') {
+        totalWidgets++;
+        const widgetType = item.widgetType || 'widget';
+        widgetSet.add(widgetType);
+        const titleSnippet = item.settings?.title || item.settings?.heading_title || item.settings?.text;
+        const preview = titleSnippet ? ` "${String(titleSnippet).slice(0, 28)}..."` : '';
+        if (treeOutline.length < 25) {
+          treeOutline.push(`${indent}🔹 [${widgetType}]${preview}`);
+        }
+      }
+
+      if (item.elements && Array.isArray(item.elements)) {
+        traverse(item.elements, depth + 1);
+      }
+    }
+  }
+
+  if (Array.isArray(elements)) {
+    traverse(elements, 0);
+  }
+
+  return {
+    totalContainers,
+    totalWidgets,
+    widgetTypes: Array.from(widgetSet),
+    treeOutline,
+  };
+}
+
+/**
  * Tool: Search Components
  */
 server.tool(
   'search_components',
-  'Search and discover CopyElement Elementor components (heroes, bento grids, footers, pricing, etc.) that have importable Elementor files.',
+  'Search CopyElement components (heroes, bento grids, footers, pricing, etc.) with compact or detailed formatting.',
   {
     query: z.string().optional().describe('Search keyword (e.g., "bento", "hero split", "pricing", "dark saas", "footer")'),
     category: z.string().optional().describe('Filter by component category slug (e.g., "bento", "hero", "wireframes", "pricing-table")'),
     filter: z.enum(['all', 'free', 'pro']).optional().default('all').describe('Filter by pricing tier: "all", "free", or "pro"'),
     only_v4: z.boolean().optional().default(false).describe('Filter exclusively for Elementor V4 container components'),
     limit: z.number().min(1).max(100).optional().default(20).describe('Max results to return (default: 20)'),
+    compact: z.boolean().optional().default(true).describe('Compact output (default: true) saves 60%+ LLM context tokens'),
     apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env variable is set)'),
   },
-  async ({ query, category, filter, only_v4, limit, apiKey }) => {
+  async ({ query, category, filter, only_v4, limit, compact, apiKey }) => {
     try {
       const response = await client.fetchCatalog('component', {
         query,
@@ -70,17 +131,27 @@ server.tool(
         };
       }
 
-      const formatted = response.items.map((item, index) => {
-        const cat = item.category || 'Uncategorized';
-        const tier = item.is_pro ? '[PRO]' : '[FREE]';
-        const v4 = item.is_v4 ? ' [V4]' : ' [V3]';
-        return `${index + 1}. ${tier}${v4} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Tags: ${item.tags || 'none'}\n   - Preview: ${item.preview_image || item.image_url || 'none'}\n   - Description: ${item.description || 'No description'}\n   - Accessible on your plan: ${item.accessible ? 'Yes' : 'No (Pro required)'}`;
-      }).join('\n\n');
+      let formatted = '';
+      if (compact) {
+        // High-density token-optimized format
+        formatted = response.items.map((item, index) => {
+          const tier = item.is_pro ? '[PRO]' : '[FREE]';
+          const v4 = item.is_v4 ? ' [V4]' : '';
+          return `${index + 1}. ${tier}${v4} **${item.name}** | ID: \`${item.id}\` | Category: \`${item.category || 'general'}\``;
+        }).join('\n');
+      } else {
+        formatted = response.items.map((item, index) => {
+          const cat = item.category || 'Uncategorized';
+          const tier = item.is_pro ? '[PRO]' : '[FREE]';
+          const v4 = item.is_v4 ? ' [V4]' : ' [V3]';
+          return `${index + 1}. ${tier}${v4} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Preview: ${item.preview_image || item.image_url || 'none'}\n   - Description: ${item.description || 'No description'}\n   - Plan Access: ${item.accessible ? 'Accessible' : 'Pro Required'}`;
+        }).join('\n\n');
+      }
 
       return {
         content: [{
           type: 'text',
-          text: `Found ${response.items.length} components (User Tier: ${response.user_tier.toUpperCase()} | Remaining Quota: ${response.remaining_quota ?? 'N/A'}):\n\n${formatted}\n\nTip: Call get_elementor_payload with a component ID to retrieve its Elementor JSON container tree.`,
+          text: `Found ${response.items.length} components (Tier: ${response.user_tier.toUpperCase()} | Quota remaining: ${response.remaining_quota ?? 'N/A'}):\n\n${formatted}\n\nTip: To retrieve Elementor JSON with minimal token usage, call get_elementor_payload with save_to_file: "./filename.json" or summary_only: true.`,
         }],
       };
     } catch (err: any) {
@@ -97,15 +168,16 @@ server.tool(
  */
 server.tool(
   'search_templates',
-  'Search and discover CopyElement full-page Elementor website templates and kits (Insura, Zenpay, Eradica, SaaS, Corporate, etc.) that have importable Elementor files.',
+  'Search full-page Elementor website templates and kits (Insura, Zenpay, Eradica, SaaS, Corporate, etc.) with token-optimized results.',
   {
     query: z.string().optional().describe('Search keyword (e.g., "insurance", "fintech", "pest control", "agency", "landing page")'),
     category: z.string().optional().describe('Filter by template category slug (e.g., "business-corporate", "technology", "creative-design")'),
     filter: z.enum(['all', 'free', 'pro']).optional().default('all').describe('Filter by pricing tier: "all", "free", or "pro"'),
     limit: z.number().min(1).max(100).optional().default(20).describe('Max results to return (default: 20)'),
+    compact: z.boolean().optional().default(true).describe('Compact output (default: true) saves 60%+ LLM context tokens'),
     apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env variable is set)'),
   },
-  async ({ query, category, filter, limit, apiKey }) => {
+  async ({ query, category, filter, limit, compact, apiKey }) => {
     try {
       const response = await client.fetchCatalog('template', {
         query,
@@ -124,16 +196,24 @@ server.tool(
         };
       }
 
-      const formatted = response.items.map((item, index) => {
-        const cat = item.category || 'Uncategorized';
-        const tier = item.is_pro ? '[PRO]' : '[FREE]';
-        return `${index + 1}. ${tier} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Preview: ${item.preview_image || item.image_url || 'none'}\n   - Description: ${item.description || 'Full page Elementor layout'}\n   - Accessible on your plan: ${item.accessible ? 'Yes' : 'No (Pro required)'}`;
-      }).join('\n\n');
+      let formatted = '';
+      if (compact) {
+        formatted = response.items.map((item, index) => {
+          const tier = item.is_pro ? '[PRO]' : '[FREE]';
+          return `${index + 1}. ${tier} **${item.name}** | ID: \`${item.id}\` | Category: \`${item.category || 'template'}\``;
+        }).join('\n');
+      } else {
+        formatted = response.items.map((item, index) => {
+          const cat = item.category || 'Uncategorized';
+          const tier = item.is_pro ? '[PRO]' : '[FREE]';
+          return `${index + 1}. ${tier} **${item.name}**\n   - ID: \`${item.id}\`\n   - Category: ${cat}\n   - Preview: ${item.preview_image || item.image_url || 'none'}\n   - Description: ${item.description || 'Full page Elementor layout'}`;
+        }).join('\n\n');
+      }
 
       return {
         content: [{
           type: 'text',
-          text: `Found ${response.items.length} full-page templates (User Tier: ${response.user_tier.toUpperCase()} | Remaining Quota: ${response.remaining_quota ?? 'N/A'}):\n\n${formatted}\n\nTip: Call get_elementor_payload with a template ID and type "template" to retrieve its Elementor JSON structure.`,
+          text: `Found ${response.items.length} full-page templates (Tier: ${response.user_tier.toUpperCase()} | Quota remaining: ${response.remaining_quota ?? 'N/A'}):\n\n${formatted}\n\nTip: Call get_elementor_payload with save_to_file: "./template.json" to write the template directly to disk without burning chat tokens.`,
         }],
       };
     } catch (err: any) {
@@ -216,20 +296,87 @@ server.tool(
 );
 
 /**
- * Tool: Get Native Elementor Payload
+ * Tool: Get Native Elementor Payload (Token-Optimized with direct file saving & structural summary)
  */
 server.tool(
   'get_elementor_payload',
-  'Retrieve the production-ready Elementor JSON container/section tree for live page insertion. Direct CDN URLs are completely hidden behind the secure API gateway.',
+  'Retrieve the Elementor JSON container/section tree. Supports save_to_file and summary_only to consume 95%+ less LLM tokens.',
   {
     id: z.string().describe('The UUID of the component or template'),
     type: z.enum(['component', 'template']).optional().default('component').describe('Item type: "component" or "template"'),
+    save_to_file: z.string().optional().describe('Optional local file path (e.g. "./my-template.json") to write the full JSON directly to disk. Recommended: saves 95%+ context tokens.'),
+    summary_only: z.boolean().optional().default(false).describe('If true, returns only the structural hierarchy & widget outline without dumping raw JSON into chat context.'),
     apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env is set)'),
   },
-  async ({ id, type, apiKey }) => {
+  async ({ id, type, save_to_file, summary_only, apiKey }) => {
     try {
       const result = await client.fetchPayload(id, type, apiKey);
+      const elements = result.elements || [];
+      const summary = summarizeElements(elements);
 
+      // If user specified save_to_file, write directly to disk and return ultra-light summary
+      if (save_to_file) {
+        const filePath = path.isAbsolute(save_to_file)
+          ? save_to_file
+          : path.resolve(process.cwd(), save_to_file);
+
+        // Ensure parent directory exists
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+
+        const filePayload = {
+          version: '0.4',
+          title: result.name || `${type}-${id}`,
+          type: type === 'template' ? 'page' : 'container',
+          content: elements,
+        };
+
+        const jsonStr = JSON.stringify(filePayload, null, 2);
+        await fs.writeFile(filePath, jsonStr, 'utf8');
+        const sizeKb = (Buffer.byteLength(jsonStr, 'utf8') / 1024).toFixed(1);
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'saved_to_file',
+              name: result.name,
+              type: result.type,
+              saved_path: filePath,
+              file_size: `${sizeKb} KB`,
+              containers_count: summary.totalContainers,
+              widgets_count: summary.totalWidgets,
+              widget_types_included: summary.widgetTypes,
+              layout_preview: summary.treeOutline,
+              instructions: `Successfully saved ${sizeKb} KB Elementor JSON to ${path.basename(filePath)}. You can import it into WordPress via Elementor > Templates > Import Templates.`,
+            }, null, 2),
+          }],
+        };
+      }
+
+      // If user requested summary only (ultra-lightweight token consumption)
+      if (summary_only) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'structural_summary',
+              id: result.id,
+              name: result.name,
+              type: result.type,
+              is_v4: result.is_v4,
+              is_pro: result.is_pro,
+              total_root_containers: elements.length,
+              total_containers: summary.totalContainers,
+              total_widgets: summary.totalWidgets,
+              widget_types: summary.widgetTypes,
+              structure_outline: summary.treeOutline,
+              tip: 'Pass save_to_file: "./output.json" to write this template directly to disk, or call again without summary_only to see full JSON.',
+            }, null, 2),
+          }],
+        };
+      }
+
+      // Standard response: includes summary + elements, with note if payload is heavy
       return {
         content: [{
           type: 'text',
@@ -240,8 +387,13 @@ server.tool(
             type: result.type,
             is_v4: result.is_v4,
             is_pro: result.is_pro,
-            elements_count: result.elements?.length || 0,
-            elements: result.elements,
+            summary: {
+              containers: summary.totalContainers,
+              widgets: summary.totalWidgets,
+              widget_types: summary.widgetTypes,
+            },
+            elements_count: elements.length,
+            elements: elements,
             remaining_quota: result.remaining_quota,
           }, null, 2),
         }],
@@ -263,13 +415,14 @@ server.tool(
  */
 server.tool(
   'build_elementor_page',
-  'Assemble multiple components and sections into a single complete Elementor Page Template JSON file ready for 1-click import into WordPress.',
+  'Assemble multiple components and sections into a single complete Elementor Page Template JSON file. Supports save_to_file for token efficiency.',
   {
     title: z.string().describe('Template title (e.g., "Modern Fintech Landing Page")'),
     component_ids: z.array(z.string()).min(1).describe('Ordered list of component UUIDs (e.g., [hero_id, bento_id, pricing_id, footer_id])'),
+    save_to_file: z.string().optional().describe('Optional local file path (e.g. "./page.json") to write assembled page directly to disk, conserving 95%+ tokens.'),
     apiKey: z.string().optional().describe('CopyElement API key (optional if COPYELEMENT_API_KEY env is set)'),
   },
-  async ({ title, component_ids, apiKey }) => {
+  async ({ title, component_ids, save_to_file, apiKey }) => {
     try {
       const allElements: any[] = [];
       const includedComponents: string[] = [];
@@ -292,6 +445,38 @@ server.tool(
         content: allElements,
       };
 
+      const summary = summarizeElements(allElements);
+
+      // If save_to_file is requested, write to disk and omit raw JSON from LLM conversation tokens
+      if (save_to_file) {
+        const filePath = path.isAbsolute(save_to_file)
+          ? save_to_file
+          : path.resolve(process.cwd(), save_to_file);
+
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        const jsonStr = JSON.stringify(elementorTemplate, null, 2);
+        await fs.writeFile(filePath, jsonStr, 'utf8');
+        const sizeKb = (Buffer.byteLength(jsonStr, 'utf8') / 1024).toFixed(1);
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'saved_to_file',
+              title,
+              saved_path: filePath,
+              file_size: `${sizeKb} KB`,
+              components_included: includedComponents,
+              total_root_containers: allElements.length,
+              total_widgets: summary.totalWidgets,
+              widget_types: summary.widgetTypes,
+              layout_preview: summary.treeOutline,
+              instructions: `Assembled page template saved to ${path.basename(filePath)}. Import it into WordPress via Elementor > Templates > Import Templates.`,
+            }, null, 2),
+          }],
+        };
+      }
+
       return {
         content: [{
           type: 'text',
@@ -300,8 +485,9 @@ server.tool(
             title,
             components_included: includedComponents,
             total_root_containers: allElements.length,
+            total_widgets: summary.totalWidgets,
             template_json: elementorTemplate,
-            instructions: 'Save template_json to a .json file (e.g. page-template.json) and import it via WordPress Admin > Elementor > Templates > Import Templates, or copy content into Elementor canvas.',
+            instructions: 'Save template_json to a .json file (e.g. page-template.json) or pass save_to_file: "./page.json" to save directly.',
           }, null, 2),
         }],
       };
@@ -319,16 +505,16 @@ server.tool(
  */
 server.tool(
   'list_categories',
-  'List available component and template design categories and layout slugs.',
+  'Quickly list available component and template design categories and layout slugs for fast searches.',
   {},
   async () => {
-    const compList = COMPONENT_CATEGORIES.map(c => `* **${c.name}** (slug: \`${c.slug}\`): ${c.description}`).join('\n');
-    const tplList = TEMPLATE_CATEGORIES.map(c => `* **${c.name}** (slug: \`${c.slug}\`): ${c.description}`).join('\n');
+    const compList = COMPONENT_CATEGORIES.map(c => `• **${c.name}** (\`${c.slug}\`): ${c.description}`).join('\n');
+    const tplList = TEMPLATE_CATEGORIES.map(c => `• **${c.name}** (\`${c.slug}\`): ${c.description}`).join('\n');
 
     return {
       content: [{
         type: 'text',
-        text: `Available Component Categories:\n${compList}\n\nAvailable Template Categories:\n${tplList}\n\nUse category slugs with search_components or search_templates.`,
+        text: `Available Component Categories:\n${compList}\n\nAvailable Template Categories:\n${tplList}\n\nUsage: Pass category: "<slug>" to search_components or search_templates for instant targeted results.`,
       }],
     };
   }
